@@ -12,10 +12,10 @@ class IdealSim:
         self.positions = rng.uniform(low=0, high=size, size=(n_particles, 3))
         self.velocities = rng.normal(loc=0, scale=v_th, size=(n_particles, 3))
         self.radius = particle_radius
-        self.boxes_by_axis = max(1, int(self.size / (2 * particle_radius))
+        self.boxes_by_axis = max(1, int(self.size / (2 * particle_radius)))
         self.boxes = np.moveaxis(np.indices((self.boxes_by_axis, self.boxes_by_axis, self.boxes_by_axis)), 0, -1)
         self.particle_tracker = (self.positions * self.boxes_by_axis) // (self.size)
-        self.timestep = 0.1 * (collision_radius / v_th)
+        self.timestep = 0.1 * (particle_radius / v_th)
     def check_collisions(self):
         collisions = set()
         vecs = self.boxes.reshape(-1, 3)
@@ -69,7 +69,7 @@ class IdealSim:
 
 
 t1 = time.time()
-sim = IdealSim(1, 100, 0.1, 10, 10)
+sim = IdealSim(1, 100, 0.1, 10)
 t_change = 0.00001
 
 print(sim.velocities[:10])
@@ -78,5 +78,7 @@ for i in range(100):
     sim.update_positions()
     sim.apply_collisions()
     positions.append(sim.positions[0])
+t2 = time.time()
+print(t2 - t1)
 
 print(sim.velocities[:10])
