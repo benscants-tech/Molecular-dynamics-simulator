@@ -6,16 +6,16 @@ import time
 
 
 class IdealSim:
-    def __init__(self, size, n_particles, particle_radius, v_th, boxes_by_axis):
+    def __init__(self, size, n_particles, particle_radius, v_th):
         self.size = size
         self.n_particles = n_particles
         self.positions = rng.uniform(low=0, high=size, size=(n_particles, 3))
         self.velocities = rng.normal(loc=0, scale=v_th, size=(n_particles, 3))
         self.radius = particle_radius
-        self.boxes = np.moveaxis(np.indices((boxes_by_axis, boxes_by_axis, boxes_by_axis)), 0, -1)
-        self.particle_tracker = (self.positions * boxes_by_axis) // (self.size)
-        self.recent_collision = {}
-        self.boxes_by_axis = boxes_by_axis
+        self.boxes_by_axis = max(1, int(self.size / (2 * particle_radius))
+        self.boxes = np.moveaxis(np.indices((self.boxes_by_axis, self.boxes_by_axis, self.boxes_by_axis)), 0, -1)
+        self.particle_tracker = (self.positions * self.boxes_by_axis) // (self.size)
+        self.timestep = 0.1 * (collision_radius / v_th)
     def check_collisions(self):
         collisions = set()
         vecs = self.boxes.reshape(-1, 3)
@@ -63,29 +63,20 @@ class IdealSim:
                 self.positions[z, 2] *= -1
             else:
                 self.positions[z, 2] = 2 * self.size - self.positions[z, 2]
-    def update_positions(self, t_change):
-        self.positions += t_change * self.velocities
+    def update_positions(self):
+        self.positions += self.timestep * self.velocities
         self.particle_tracker = (self.positions * self.boxes_by_axis) // self.size
+
 
 t1 = time.time()
 sim = IdealSim(1, 100, 0.1, 10, 10)
 t_change = 0.00001
 
+print(sim.velocities[:10])
 positions = []
-for i in range(10000):
-    sim.update_positions(t_change)
+for i in range(100):
+    sim.update_positions()
     sim.apply_collisions()
     positions.append(sim.positions[0])
 
-x_speeds = sim.velocities[:, 0]
-
-t2 = time.time()
-print(t1 - t2)
-plt.plot(x_speeds)
-
-plt.plot(positions)
-plt.show()
-
-
-    
-
+print(sim.velocities[:10])
