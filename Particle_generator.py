@@ -12,15 +12,21 @@ class IdealSim:
         self.radius = particle_radius
         self.boxes = np.moveaxis(np.indices((boxes_by_axis, boxes_by_axis, boxes_by_axis)), 0, -1)
         self.particle_tracker = (self.positions * boxes_by_axis) // (self.size)
+        adj = set()
+        for i in [-1 0, 1]:
+            for j in [-1 0, 1]:
+                for k in [-1, 0, 1]:
+                    adj.add(np.array([i, j, k]))
+        self.adj = adj
     def check_collisions(self):
         collisions = []
         vecs = self.boxes.reshape(-1, 3)
         for v in vecs:
-            particle_indexes = np.where(np.linalg.norm(self.particle_tracker - v, axis=1) <= 2)[0]
+            particle_indexes = np.where(np.max(np.abs(self.particle_tracker - v),axis=1) <= 1)[0]
             l = len(particle_indexes)
             for i in range(l):
                 for j in range(l)[i + 1:]:
-                    if np.linalg.norm(self.positions[i] - self.positions[j]) < 2 * self.radius and i != j:
+                    if np.linalg.norm(self.positions[particle_indexes[i]] - self.positions[particle_indexes[j]]) < 2 * self.radius and i != j:
                         collisions.append([i, j])
         x_crosses = np.where((0 > self.positions[:, 0]) | (self.positions[:, 0] > self.size))[0]
         y_crosses = np.where((0 > self.positions[:, 1]) | (self.positions[:, 1] > self.size))[0]
@@ -34,18 +40,29 @@ class IdealSim:
         v2 = u2 - alpha * r
         self.velocities[p1] = v1
         self.velocities[p2] = v2
+    def apply_collisions(self):
+        collisions, x_crosses, y_crosses, z_crosses = self.check_collisions()
+        for c in collisions:
+            i, j = c
+            self.collision_velocity_change(i, j)
+        for x in x_crosses:
+            self.velocities[x, 0] *= -1
+        for y in y_crosses:
+            self.velocities[y, 1] *= -1
+        for z in z_crosses:
+            self.velocities[z, 2] *= -1
+    def update_positions(self, t_change):
+        self.positions += t_change * self.velocities
+
+sim = IdealSim(1, 1000, 0.01, 100, 10)
+t_change = 0.00001
+
+for i in range(10000):
+    sim.update_positions(t_change)
+    sim.apply_collisions()
 
 
-sim = IdealSim(10, 10, 1, 10, 4)
-print(sim.boxes)
-print(sim.check_collisions())
-print(sim.velocities)
-v1, v2 = sim.velocities[0,:], sim.velocities[1, :]
-v1 = v1.copy()
-v2 = v2.copy()
-sim.collision_velocity_change(0, 1)
-print(sim.velocities)
-x1, x2 = sim.velocities[0, :], sim.velocities[1, :]
-print(x1)
-print(x1.dtype)
-print(np.linalg.norm(x1) **2 + np.linalg.norm(x2) ** 2 - np.linalg.norm(v1) **2 - np.linalg.norm(v2) **2 )
+
+
+    
+
