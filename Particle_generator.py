@@ -1,6 +1,8 @@
 import numpy as np
 from numba import njit
 rng = np.random.default_rng()
+import matplotlib.pyplot as plt
+import time
 
 
 class IdealSim:
@@ -12,22 +14,20 @@ class IdealSim:
         self.radius = particle_radius
         self.boxes = np.moveaxis(np.indices((boxes_by_axis, boxes_by_axis, boxes_by_axis)), 0, -1)
         self.particle_tracker = (self.positions * boxes_by_axis) // (self.size)
-        adj = set()
-        for i in [-1 0, 1]:
-            for j in [-1 0, 1]:
-                for k in [-1, 0, 1]:
-                    adj.add(np.array([i, j, k]))
-        self.adj = adj
+        self.recent_collision = {}
+        self.boxes_by_axis = boxes_by_axis
     def check_collisions(self):
-        collisions = []
+        collisions = set()
         vecs = self.boxes.reshape(-1, 3)
         for v in vecs:
             particle_indexes = np.where(np.max(np.abs(self.particle_tracker - v),axis=1) <= 1)[0]
             l = len(particle_indexes)
+            # next we should use combinations to make this for loop run faster
             for i in range(l):
                 for j in range(l)[i + 1:]:
-                    if np.linalg.norm(self.positions[particle_indexes[i]] - self.positions[particle_indexes[j]]) < 2 * self.radius and i != j:
-                        collisions.append([i, j])
+                    r1, r2, u1, u2 = self.positions[particle_indexes[i]], self.positions[particle_indexes[j]], self.velocities[particle_indexes[i]], self.velocities[particle_indexes[j]]
+                    if np.linalg.norm(r1 - r2) < 2 * self.radius and np.dot(u1 - u2, r1 - r2) < 0:
+                        collisions.add((particle_indexes[i], particle_indexes[j]))
         x_crosses = np.where((0 > self.positions[:, 0]) | (self.positions[:, 0] > self.size))[0]
         y_crosses = np.where((0 > self.positions[:, 1]) | (self.positions[:, 1] > self.size))[0]
         z_crosses = np.where((0 > self.positions[:, 2]) | (self.positions[:, 2] > self.size))[0]
@@ -47,21 +47,44 @@ class IdealSim:
             self.collision_velocity_change(i, j)
         for x in x_crosses:
             self.velocities[x, 0] *= -1
+            if self.positions[x, 0] < 0:
+                self.positions[x, 0] *= -1
+            else:
+                self.positions[x, 0] = 2 * self.size - self.positions[x, 0]
         for y in y_crosses:
             self.velocities[y, 1] *= -1
+            if self.positions[y, 1] < 0:
+                self.positions[y, 1] *= -1
+            else:
+                self.positions[y, 1] = 2 * self.size - self.positions[y, 1]
         for z in z_crosses:
             self.velocities[z, 2] *= -1
+            if self.positions[z, 2] < 0:
+                self.positions[z, 2] *= -1
+            else:
+                self.positions[z, 2] = 2 * self.size - self.positions[z, 2]
     def update_positions(self, t_change):
         self.positions += t_change * self.velocities
+        self.particle_tracker = (self.positions * self.boxes_by_axis) // self.size
 
-sim = IdealSim(1, 1000, 0.01, 100, 10)
+t1 = time.time()
+sim = IdealSim(1, 100, 0.1, 10, 10)
 t_change = 0.00001
 
+positions = []
 for i in range(10000):
     sim.update_positions(t_change)
     sim.apply_collisions()
+    positions.append(sim.positions[0])
 
+x_speeds = sim.velocities[:, 0]
 
+t2 = time.time()
+print(t1 - t2)
+plt.plot(x_speeds)
+
+plt.plot(positions)
+plt.show()
 
 
     
