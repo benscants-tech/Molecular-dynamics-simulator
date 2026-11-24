@@ -4,7 +4,6 @@ rng = np.random.default_rng()
 import matplotlib.pyplot as plt
 import time
 
-
 class IdealSim:
     def __init__(self, size, n_particles, particle_radius, v_th):
         self.size = size
@@ -15,19 +14,44 @@ class IdealSim:
         self.boxes_by_axis = max(1, int(self.size / (2 * particle_radius)))
         self.boxes = np.moveaxis(np.indices((self.boxes_by_axis, self.boxes_by_axis, self.boxes_by_axis)), 0, -1)
         self.particle_tracker = (self.positions * self.boxes_by_axis) // (self.size)
-        self.timestep = 0.1 * (particle_radius / v_th)
+        self.timestep = 0.2 * (particle_radius / v_th)
+        adjacents = {}
     def check_collisions(self):
+        n_boxes = self.boxes_by_axis ** 3
+        b = self.boxes_by_axis
+        cells = [[] for _ in range(n_boxes)]
         collisions = set()
-        vecs = self.boxes.reshape(-1, 3)
-        for v in vecs:
-            particle_indexes = np.where(np.max(np.abs(self.particle_tracker - v),axis=1) <= 1)[0]
-            l = len(particle_indexes)
-            # next we should use combinations to make this for loop run faster
-            for i in range(l):
-                for j in range(l)[i + 1:]:
-                    r1, r2, u1, u2 = self.positions[particle_indexes[i]], self.positions[particle_indexes[j]], self.velocities[particle_indexes[i]], self.velocities[particle_indexes[j]]
+        for i in range(self.n_particles):
+            cell_id = self.particle_tracker[i, 0] + b * self.particle_tracker[i, 1] + self.particle_tracker[i, 2] * b ** 2
+            cells[int(cell_id)].append(i)
+        c = 0
+        while c < n_boxes:
+            particles = cells[c]
+            list = range(len(particles))
+            adjacents = []
+            bz = c // (b ** 2)
+            by = (c - bz * b ** 2) // (b)
+            bx = (c - by * b - bz * b ** 2)
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    for dz in [-1, 0, 1]:
+                        if dx + 2 * dy + 4 * dz > 0:
+                            if max(bx + dx, by + dy, bz + dz) < b and min(bx + dx, by + dy, bz +dz) > -1:
+                                adjacents.append(c + dx + b * dy + b **2 * dz)
+            for i in list:
+                p1 = particles[i]
+                r1 = self.positions[p1]
+                u1 = self.velocities[p1]
+                for adj in adjacents:
+                    for p2 in cells[adj]:
+                        r2, u2 = self.positions[p2], self.velocities[p2]
+                        if np.linalg.norm(r1 - r2) < 2 * self.radius and np.dot(u1 - u2, r1 - r2) < 0:
+                            collisions.add((p1, p2))
+                for j in list[i + 1:]:
+                    r2, u2 = self.positions[particles[j]], self.velocities[particles[j]]
                     if np.linalg.norm(r1 - r2) < 2 * self.radius and np.dot(u1 - u2, r1 - r2) < 0:
-                        collisions.add((particle_indexes[i], particle_indexes[j]))
+                                                collisions.add((p1, particles[j]))
+            c += 1
         x_crosses = np.where((0 > self.positions[:, 0]) | (self.positions[:, 0] > self.size))[0]
         y_crosses = np.where((0 > self.positions[:, 1]) | (self.positions[:, 1] > self.size))[0]
         z_crosses = np.where((0 > self.positions[:, 2]) | (self.positions[:, 2] > self.size))[0]
@@ -65,20 +89,19 @@ class IdealSim:
                 self.positions[z, 2] = 2 * self.size - self.positions[z, 2]
     def update_positions(self):
         self.positions += self.timestep * self.velocities
-        self.particle_tracker = (self.positions * self.boxes_by_axis) // self.size
+        self.particle_tracker = np.clip((self.positions * self.boxes_by_axis) // self.size, 0, self.boxes_by_axis - 1)
 
 
 t1 = time.time()
-sim = IdealSim(1, 100, 0.1, 10)
-t_change = 0.00001
+sim = IdealSim(1, 40, 0.02, 10)
 
-print(sim.velocities[:10])
 positions = []
-for i in range(100):
+for i in range(500):
     sim.update_positions()
     sim.apply_collisions()
-    positions.append(sim.positions[0])
+    positions.append(sim.positions[0].copy())
 t2 = time.time()
 print(t2 - t1)
-
-print(sim.velocities[:10])
+p = np.stack(positions, axis=0)
+plt.plot(p[:, 0])
+plt.show()
