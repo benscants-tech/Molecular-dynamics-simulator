@@ -15,7 +15,23 @@ class IdealSim:
         self.boxes = np.moveaxis(np.indices((self.boxes_by_axis, self.boxes_by_axis, self.boxes_by_axis)), 0, -1)
         self.particle_tracker = (self.positions * self.boxes_by_axis) // (self.size)
         self.timestep = 0.2 * (particle_radius / v_th)
-        adjacents = {}
+        self.boxes_total = self.boxes_by_axis ** 3
+        adjacency_list = []
+        b = self.boxes_by_axis
+        for c in range(self.boxes_by_axis ** 3):
+            adjacents = []
+            bz = c // (b ** 2)
+            by = (c - bz * b ** 2) // (b)
+            bx = (c - by * b - bz * b ** 2)
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    for dz in [-1, 0, 1]:
+                        if dx + 2 * dy + 4 * dz > 0:
+                            if max(bx + dx, by + dy, bz + dz) < b and min(bx + dx, by + dy, bz +dz) > -1:
+                                adjacents.append(c + dx + b * dy + b **2 * dz)
+            adjacency_list.append(adjacents)
+        self.adjacency = adjacency_list  
+             
     def check_collisions(self):
         n_boxes = self.boxes_by_axis ** 3
         b = self.boxes_by_axis
@@ -27,22 +43,15 @@ class IdealSim:
         c = 0
         while c < n_boxes:
             particles = cells[c]
+            if not particles:
+                c += 1
+                break
             list = range(len(particles))
-            adjacents = []
-            bz = c // (b ** 2)
-            by = (c - bz * b ** 2) // (b)
-            bx = (c - by * b - bz * b ** 2)
-            for dx in [-1, 0, 1]:
-                for dy in [-1, 0, 1]:
-                    for dz in [-1, 0, 1]:
-                        if dx + 2 * dy + 4 * dz > 0:
-                            if max(bx + dx, by + dy, bz + dz) < b and min(bx + dx, by + dy, bz +dz) > -1:
-                                adjacents.append(c + dx + b * dy + b **2 * dz)
             for i in list:
                 p1 = particles[i]
                 r1 = self.positions[p1]
                 u1 = self.velocities[p1]
-                for adj in adjacents:
+                for adj in self.adjacency:
                     for p2 in cells[adj]:
                         r2, u2 = self.positions[p2], self.velocities[p2]
                         if np.linalg.norm(r1 - r2) < 2 * self.radius and np.dot(u1 - u2, r1 - r2) < 0:
