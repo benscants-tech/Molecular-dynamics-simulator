@@ -14,6 +14,7 @@ class IdealSim:
         self.radius = particle_radius
         self.boxes_by_axis = max(1, int(self.size / (2 * particle_radius)))
         self.boxes = np.moveaxis(np.indices((self.boxes_by_axis, self.boxes_by_axis, self.boxes_by_axis)), 0, -1)
+        print(np.shape(self.boxes))
         self.particle_tracker = (self.positions * self.boxes_by_axis) // (self.size)
         self.timestep = 0.1 * (particle_radius / v_th)
         self.boxes_total = self.boxes_by_axis ** 3
@@ -154,7 +155,7 @@ for i in range(1000):
     positions.append(sim.positions[0, 0])
 
 t2 = time.time()
-plt.plot(np.arange(1000) * timestep, np.array(positions))
+plt.plot(np.arange(1000) * sim.timestep, np.array(positions))
 plt.show()
 
 print(t2 - t1)

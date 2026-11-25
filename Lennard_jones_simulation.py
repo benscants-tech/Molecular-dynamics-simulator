@@ -4,13 +4,14 @@ import matplotlib.pyplot as plt
 
 rng = np.random.default_rng()
 class LennardJones:
-    def __init__(self, size, n_particles, sigma, epsilon, v_th, tstep):
+    def __init__(self, size: float, particles_per_axis: int, sigma: float, epsilon: float, v_th: float, tstep: float):
         self.size = size
-        self.radius = 3 * sigma
-        self.boxes_by_axis = max(1, int(self.size / (2 * self.radius)))
-        self.n_particles = n_particles
-        self.positions = rng.uniform(low=0, high=size, size=(n_particles, 3))
-        self.velocities = rng.normal(loc=0, scale=v_th, size=(n_particles, 3))
+        self.cutoff = 3 * sigma
+        self.boxes_by_axis = max(1, int(self.size / (self.cutoff)))
+        self.n_particles = particles_per_axis ** 3
+        grid =  np.moveaxis(np.indices((particles_per_axis, particles_per_axis, particles_per_axis)), 0, -1).reshape(-1, 3)
+        self.positions = (grid + 0.5) * (self.size / particles_per_axis)
+        self.velocities = rng.normal(loc=0, scale=v_th, size=(self.n_particles, 3))
         self.sigma = sigma
         self.epsilon = epsilon
         self.timestep = tstep
@@ -26,67 +27,74 @@ class LennardJones:
                 for dy in [-1, 0, 1]:
                     for dz in [-1, 0, 1]:
                         if dx + 2 * dy + 4 * dz > 0:
-                            if max(bx + dx, by + dy, bz + dz) < b and min(bx + dx, by + dy, bz +dz) > -1:
-                                adjacents.append(c + dx + b * dy + b **2 * dz)
+                            if b > 2:
+                                nx, ny, nz = (bx + dx) % b - bx, (by + dy) % b - by, (bz + dz) % b - bz
+                                adjacents.append(c + nx + (b * ny)  + b **2 * nz)
+                            else:
+                                if min(bx + dx, by + dy, bz + dz) > -1 and max(bx + dx, by + dy, bz + dz) < b:
+                                    adjacents.append(c + dx + (b * dy) + (b ** 2 * dz))
             adjacency_list.append(adjacents)
         self.adjacency = adjacency_list
-    def check_interactions(self):
+    def check_interactions(self) -> list: 
         n_boxes = self.boxes_by_axis ** 3
         b = self.boxes_by_axis
-        cells = [[] for _ in range(n_boxes)]
-        interactions = set()
+        cells = {}
+        interactions = []
         for i in range(self.n_particles):
             cell_id = self.particle_tracker[i, 0] + b * self.particle_tracker[i, 1] + self.particle_tracker[i, 2] * b ** 2
-            cells[int(cell_id)].append(i)
+            if int(cell_id) in cells.keys():
+                cells[int(cell_id)].append(i)
+            else:
+                cells[int(cell_id)] = [i]
         c = 0
         while c < n_boxes:
-            particles = cells[c]
-            if not particles:
-                c += 1
-                break
-            list = range(len(particles))
-            for i in list:
-                p1 = particles[i]
-                r1 = self.positions[p1]
-                for adj in self.adjacency[c]:
-                    for p2 in cells[adj]:
-                        r2 = self.positions[p2]
-                        if np.linalg.norm(r1 - r2) < 2 * self.radius:
-                            interactions.add((p1, p2))
-                for j in list[i + 1:]:
-                    r2 = self.positions[particles[j]]
-                    if np.linalg.norm(r1 - r2) < 2 * self.radius:
-                                                interactions.add((p1, particles[j]))
+            if c in cells.keys():
+                particles = cells[c]
+                l = range(len(particles))
+                for i in l:
+                    p1 = particles[i]
+                    r1 = self.positions[p1]
+                    if self.boxes_by_axis > 1:
+                        for adj in self.adjacency[c]:
+                            if adj in cells.keys():
+                                for p2 in cells[adj]:
+                                    r2 = self.positions[p2]
+                                    d = r2 - r1
+                                    d -= self.size * np.round(d / self.size)
+                                    if np.linalg.norm(d) < self.cutoff:
+                                        interactions.append([(p1, p2), d])
+                    for j in l[i + 1:]:
+                        r2 = self.positions[particles[j]]
+                        if np.linalg.norm(d) < self.cutoff:
+                            interactions.append([(p1, particles[j]), d])
             c += 1
-    def compute_acceleration(self, p1, p2):
-        r1, r2 = self.positions[p1], self.positions[p2]
-        r = np.linalg.norm(r2 - r1)
+        return interactions
+    def compute_acceleration(self, d: np.ndarray) -> np.ndarray:
+        r = np.linalg.norm(d)
         ratio = self.sigma / r
-        factor = (self.epsilon / (self.sigma * r)) * (6 * ratio** 7 - 12 * ratio ** 13)
-        return (r2 - r1) * factor
+        factor = 4 * (self.epsilon / (self.sigma * r)) * (6 * ratio** 7 - 12 * ratio ** 13)
+        return (d) * factor
     def apply_forward_step(self):
         interactions = self.check_interactions()
-        a_n = np.zeros(self.n_particles, 3)
-        for p1, p2 in interactions:
-            acc = self.compute_acceleration(p1, p2)
+        a_n = np.zeros((self.n_particles, 3))
+        for (p1, p2), d in interactions:
+            acc = self.compute_acceleration(d)
             a_n[p1, :] += acc
             a_n[p2, :] -= acc
         self.velocities +=  0.5 * self.timestep * a_n
-        self.positions += self.timestp * self.velocities
-        a_n_add_one = np.zeros(self.n_particles, 3)
-        for p1_p2 in interactions:
-            acc = self.compute_acceleration(p1, p2)
-            a_n[p1, :] += acc
-            a_n[p2, :] -= acc
-        self.velocities += 0.5 * self.timestep * a_n
-        self.positions = self.positions // self.size
-    
-        
-             
-            
+        self.positions += self.timestep * self.velocities
+        a_n_add_one = np.zeros((self.n_particles, 3))
+        for ((p1, p2), d) in interactions:
+            acc = self.compute_acceleration(d + self.timestep * (self.velocities[p2] - self.velocities[p1]))
+            a_n_add_one[p1, :] += acc
+            a_n_add_one[p2, :] -= acc
+        self.velocities += 0.5 * self.timestep * a_n_add_one
+        self.positions = self.positions % self.size
+        self.particle_tracker = (self.positions * self.boxes_by_axis) // self.size
+    def run(self, n_steps: int):
+        for i in range(n_steps):
+            self.apply_forward_step()
 
+sim = LennardJones(10, 10, 0.1, 0.1, 1, 0.001)
 
-# structure: look at the interactions
-# sum over each one for each particle
-# implement a verlet timestep
-# check if anything has crossed the axes, in which case put them on the opposite side.
+sim.run(10)
