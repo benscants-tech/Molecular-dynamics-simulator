@@ -121,29 +121,42 @@ class IdealSim:
     def update_positions(self):
         self.positions += self.timestep * self.velocities
         self.particle_tracker = np.clip((self.positions * self.boxes_by_axis) // self.size, 0, self.boxes_by_axis - 1)
-    def measure_pressure(self):
-        for i in range(100):
-            self.update_positions()
-            self.apply_collisions()
-        momentum_per_step = np.mean(np.array(self.wall_hits))
-        pressure = momentum_per_step / (self.timestep * 6 * self.size ** 2)
-        print(pressure)
-    def measure_collision_frequency(self):
-        for i in range(100):
-            self.update_positions()
-            self.apply_collisions()
-        print(np.mean(np.array(self.colls)) / self.timestep)
     def run(self, n_steps):
         for i in range(n_steps):
             self.update_positions()
             self.apply_collisions()
-    
+    def measure_pressure(self):
+            self.run(100)
+            momentum_per_step = np.mean(np.array(self.wall_hits))
+            pressure = momentum_per_step / (self.timestep * 6 * self.size ** 2)
+            print(pressure)
+    def measure_collision_frequency(self):
+        self.run(100)
+        print(np.mean(np.array(self.colls)) / self.timestep)
+    def clear_data(self):
+        self.colls = []
+        self.wall_hits = []
 
-t1 = time.time()
 
 positions = []
 sim = IdealSim(10, 10000, 0.15, 10)
 
 sim.measure_pressure()
+sim.clear_data()
 sim.measure_collision_frequency()
+
+
+positions = []
+t1 = time.time()
+for i in range(1000):
+    sim.update_positions()
+    sim.apply_collisions()
+    positions.append(sim.positions[0, 0])
+
+t2 = time.time()
+plt.plot(np.arange(1000) * timestep, np.array(positions))
+plt.show()
+
+print(t2 - t1)
+
 

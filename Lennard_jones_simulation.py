@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 
 
 rng = np.random.default_rng()
-class LenardJones:
-    def __init__(self, size, n_particles, sigma, epsilon, v_th):
+class LennardJones:
+    def __init__(self, size, n_particles, sigma, epsilon, v_th, tstep):
         self.size = size
         self.radius = 3 * sigma
         self.boxes_by_axis = max(1, int(self.size / (2 * self.radius)))
@@ -13,6 +13,7 @@ class LenardJones:
         self.velocities = rng.normal(loc=0, scale=v_th, size=(n_particles, 3))
         self.sigma = sigma
         self.epsilon = epsilon
+        self.timestep = tstep
         self.particle_tracker = (self.positions * self.boxes_by_axis) // (self.size)
         adjacency_list = []
         b = self.boxes_by_axis
@@ -57,7 +58,34 @@ class LenardJones:
                     if np.linalg.norm(r1 - r2) < 2 * self.radius:
                                                 interactions.add((p1, particles[j]))
             c += 1
+    def compute_acceleration(self, p1, p2):
+        r1, r2 = self.positions[p1], self.positions[p2]
+        r = np.linalg.norm(r2 - r1)
+        ratio = self.sigma / r
+        factor = (self.epsilon / (self.sigma * r)) * (6 * ratio** 7 - 12 * ratio ** 13)
+        return (r2 - r1) * factor
     def apply_forward_step(self):
+        interactions = self.check_interactions()
+        a_n = np.zeros(self.n_particles, 3)
+        for p1, p2 in interactions:
+            acc = self.compute_acceleration(p1, p2)
+            a_n[p1, :] += acc
+            a_n[p2, :] -= acc
+        self.velocities +=  0.5 * self.timestep * a_n
+        self.positions += self.timestp * self.velocities
+        a_n_add_one = np.zeros(self.n_particles, 3)
+        for p1_p2 in interactions:
+            acc = self.compute_acceleration(p1, p2)
+            a_n[p1, :] += acc
+            a_n[p2, :] -= acc
+        self.velocities += 0.5 * self.timestep * a_n
+        self.positions = self.positions // self.size
+    
+        
+             
+            
+
+
 # structure: look at the interactions
 # sum over each one for each particle
 # implement a verlet timestep
