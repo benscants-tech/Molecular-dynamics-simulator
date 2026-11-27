@@ -29,8 +29,8 @@ pip install numpy matplotlib numba
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git
-   cd YOUR_REPOSITORY
+   git clone https://github.com/benscants-tech/Molecular-dynamics-simulator.git
+   cd Molecular-dynamics-simulator
    ```
 
 2. Install the dependencies:
