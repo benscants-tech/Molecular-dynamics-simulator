@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 
+
 rng = np.random.default_rng()
 class LennardJones:
     def __init__(self, size: float, particles_per_axis: int, sigma: float, epsilon: float, v_th: float, tstep: float):
@@ -13,10 +14,12 @@ class LennardJones:
         grid =  np.moveaxis(np.indices((particles_per_axis, particles_per_axis, particles_per_axis)), 0, -1).reshape(-1, 3)
         self.positions = (grid + 0.5) * (self.size / particles_per_axis)
         self.velocities = rng.normal(loc=0, scale=v_th, size=(self.n_particles, 3))
+        self.velocities -= np.mean(self.velocities, axis=0)
         self.sigma = sigma
         self.epsilon = epsilon
         self.timestep = tstep
         self.particle_tracker = (self.positions * self.boxes_by_axis) // (self.size)
+        self.unwrapped = self.positions.copy()
         adjacency_list = []
         b = self.boxes_by_axis
         for c in range(self.boxes_by_axis ** 3):
@@ -87,6 +90,7 @@ class LennardJones:
             a_n[p2, :] -= acc
         self.velocities +=  0.5 * self.timestep * a_n
         self.positions += self.timestep * self.velocities
+        self.unwrapped += self.timestep * self.velocities
         a_n_add_one = np.zeros((self.n_particles, 3))
         for ((p1, p2), d) in interactions:
             acc = self.compute_acceleration(d + self.timestep * (self.velocities[p2] - self.velocities[p1]), sigma_sq)
@@ -114,42 +118,76 @@ class LennardJones:
         original_positions = self.positions.copy()
         msd = []
         for i in range(10):
-            self.run(10)
+            self.run(30)
             disp = self.positions - original_positions
-            msd.append(np.mean(disp ** 2))
+            msd.append(3 * np.mean(disp ** 2))
         return msd
 
 sim = LennardJones(5, 5, 1, 1, 1, 0.005)
 print(sim.compute_potential_energy())
 
-r = range(5, 10)
+rho = 0.8
+r = range(8, 14)
 times = []
-for i in range(5):
-    sim = LennardJones(r[i], r[i], 1, 1, 1, 0.005)
-    t1 = time.time()
-    sim.run(50)
-    t2 = time.time()
-    print(t2-t1)
-    times.append(t2 - t1)
+highs = []
+lows = []
+for i in range(6):
+    times_in_run = []
+    for _ in range(5):
+        sim = LennardJones(r[i] / (rho**(1/3)), r[i], 1, 1, 1, 0.005)
+        t1 = time.time()
+        sim.run(15)
+        t2 = time.time()
+        times_in_run.append(t2 - t1)
+    times_in_run.sort()
+    times.append(times_in_run[2])
+    highs.append(times_in_run[-1])
+    lows.append(times_in_run[0])
+
+(slope, intercept), cov = np.polyfit(np.log(np.array(r) ** 3), np.log(np.array(times)), 1, cov=True)
+print(f"slope = {slope:.2f} +- {np.sqrt(cov[0, 0]):.2f}")
 
 fig1, ax1 = plt.subplots()
 
-ax1.plot(np.array(r) ** 3, times)
+ax1.errorbar(np.array(r) ** 3, times, yerr = [np.array(times) - np.array(lows),np.array(highs) - np.array(times)], fmt="o", capsize=3)
 ax1.set_title("Runtime against number of particles")
 
 sim = LennardJones(10, 10, 1, 1, 1, 0.005)
-energies = []
-for i in range(100):
-    energies.append(sim.compute_potential_energy() + sim.compute_kinetic_energy())
-    sim.take_step_forward
+t = 0.1
+median_errors = []
+displacements = []
+tsteps = 0.001 * (np.arange(5) + 1)
 
-E_0 = energies[0]
-energy_change = (np.array(energies) - E_0) / E_0
+mean_err = []
+std_err = []
+slopes = []
+for i in tsteps:
+    errors_by_timestep = []
+    for _ in range(5):
+        sim = LennardJones(10, 10, 1, 1, 1, i)
+        sim.run(int(0.5 / i))
+        energies_by_run = []
+        for j in range(int(t / i)):
+            sim.apply_forward_step()
+            energy = sim.compute_potential_energy() + sim.compute_kinetic_energy()
+            energies_by_run.append(energy)
+        energies_by_run = np.array(energies_by_run)
+        slope, intercept = np.polyfit(i * np.arange(int(t / i)), energies_by_run, 1)
+        slopes.append(slope)
+        errors_by_timestep.append(np.std(energies_by_run) / np.abs(np.mean(energies_by_run)))
+    errors_by_timestep = np.array(errors_by_timestep)
+    mean_err.append(np.mean(errors_by_timestep))
+    std_err.append(np.std(errors_by_timestep))
+
+print(np.array(slopes))
+
+mean_err = np.array(mean_err)
+std_err = np.array(std_err)
+
 
 fig2, ax2 = plt.subplots()
-ax2.plot(energy_change)
+ax2.errorbar(tsteps, mean_err, yerr=std_err, fmt="o", capsize=3)
 
-ax2.set_title("Energy change against time")
-
-
-plt.show()
+ax2.set_title("Energy change against timestep")
+(slope, intercept), cov = np.polyfit(np.log(tsteps), np.log(mean_err), 1, cov=True)
+print(f"slope = {slope:.2f} +- {np.sqrt(cov[0, 0]):.2f}")
