@@ -49,28 +49,26 @@ class LennardJones:
             else:
                 cells[int(cell_id)] = [i]
         c = 0
-        while c < n_boxes:
-            if c in cells:
-                particles = cells[c]
-                l = range(len(particles))
-                for i in l:
-                    p1 = particles[i]
-                    r1 = self.positions[p1]
-                    if self.boxes_by_axis > 1:
-                        for adj in self.adjacency[c]:
-                            if adj in cells.keys():
-                                for p2 in cells[adj]:
-                                    r2 = self.positions[p2]
-                                    d = r2 - r1
-                                    d -= self.size * np.round(d / self.size)
-                                    if np.dot(d, d) < self.cutoff_sq + delta:
-                                        interactions.append([(p1, p2), d])
-                    for j in l[i + 1:]:
-                        r2 = self.positions[particles[j]]
-                        d = r2 - r1
-                        if np.dot(d, d) < self.cutoff_sq + delta:
-                            interactions.append([(p1, particles[j]), d])
-            c += 1
+        for c in cells.keys():
+            particles = cells[c]
+            l = range(len(particles))
+            for i in l:
+                p1 = particles[i]
+                r1 = self.positions[p1]
+                if self.boxes_by_axis > 1:
+                    for adj in self.adjacency[c]:
+                        if adj in cells.keys():
+                            for p2 in cells[adj]:
+                                r2 = self.positions[p2]
+                                d = r2 - r1
+                                d -= self.size * np.round(d / self.size)
+                                if np.dot(d, d) < self.cutoff_sq + delta:
+                                    interactions.append([(p1, p2), d])
+                for j in l[i + 1:]:
+                    r2 = self.positions[particles[j]]
+                    d = r2 - r1
+                    if np.dot(d, d) < self.cutoff_sq + delta:
+                        interactions.append([(p1, particles[j]), d])
         return interactions
     def compute_acceleration(self, d: np.ndarray, sigma_sq: float) -> np.ndarray:
         r_sq = np.dot(d, d)
@@ -109,27 +107,49 @@ class LennardJones:
         r_sq[a, a] = 1
         squared_ratio = sigma_sq / r_sq
         potentials = 4 * self.epsilon * (squared_ratio ** 6 - squared_ratio ** 3)
-        return 2 * np.sum(potentials[np.triu_indices(potentials.shape[0], k=1)])
+        return np.sum(potentials[np.triu_indices(potentials.shape[0], k=1)])
     def compute_kinetic_energy(self):
         return 0.5 * np.sum(self.velocities ** 2)
+    def mean_squared_displacement(self):
+        original_positions = self.positions.copy()
+        msd = []
+        for i in range(10):
+            self.run(10)
+            disp = self.positions - original_positions
+            msd.append(np.mean(disp ** 2))
+        return msd
 
-        
-
-
-    
-sim = LennardJones(125, 5, 1, 1, 1, 0.005)
+sim = LennardJones(5, 5, 1, 1, 1, 0.005)
 print(sim.compute_potential_energy())
 
 r = range(5, 10)
 times = []
 for i in range(5):
-    sim = LennardJones(r[i] ** 3, r[i], 1, 1, 1, 0.005)
+    sim = LennardJones(r[i], r[i], 1, 1, 1, 0.005)
     t1 = time.time()
     sim.run(50)
     t2 = time.time()
     print(t2-t1)
     times.append(t2 - t1)
 
+fig1, ax1 = plt.subplots()
 
-plt.plot(np.array(r) ** 3, times)
+ax1.plot(np.array(r) ** 3, times)
+ax1.set_title("Runtime against number of particles")
+
+sim = LennardJones(10, 10, 1, 1, 1, 0.005)
+energies = []
+for i in range(100):
+    energies.append(sim.compute_potential_energy() + sim.compute_kinetic_energy())
+    sim.take_step_forward
+
+E_0 = energies[0]
+energy_change = (np.array(energies) - E_0) / E_0
+
+fig2, ax2 = plt.subplots()
+ax2.plot(energy_change)
+
+ax2.set_title("Energy change against time")
+
+
 plt.show()

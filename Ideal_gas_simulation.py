@@ -14,7 +14,6 @@ class IdealSim:
         self.radius = particle_radius
         self.boxes_by_axis = max(1, int(self.size / (2 * particle_radius)))
         self.boxes = np.moveaxis(np.indices((self.boxes_by_axis, self.boxes_by_axis, self.boxes_by_axis)), 0, -1)
-        print(np.shape(self.boxes))
         self.particle_tracker = (self.positions * self.boxes_by_axis) // (self.size)
         self.timestep = 0.1 * (particle_radius / v_th)
         self.boxes_total = self.boxes_by_axis ** 3
@@ -47,25 +46,23 @@ class IdealSim:
             else:
                 cells[int(cell_id)] = [i]
         c = 0
-        while c < n_boxes:
-            if c in cells.keys():
-                particles = cells[c]
-                list = range(len(particles))
-                for i in list:
-                    p1 = particles[i]
-                    r1 = self.positions[p1]
-                    u1 = self.velocities[p1]
-                    for adj in self.adjacency[c]:
-                        if adj in cells.keys():
-                            for p2 in cells[adj]:
-                                r2, u2 = self.positions[p2], self.velocities[p2]
-                                if np.linalg.norm(r1 - r2) < 2 * self.radius and np.dot(u1 - u2, r1 - r2) < 0:
-                                    collisions.add((p1, p2))
-                    for j in list[i + 1:]:
-                        r2, u2 = self.positions[particles[j]], self.velocities[particles[j]]
-                        if np.linalg.norm(r1 - r2) < 2 * self.radius and np.dot(u1 - u2, r1 - r2) < 0:
-                            collisions.add((p1, particles[j]))
-            c += 1
+        for c in cells.keys():
+            particles = cells[c]
+            list = range(len(particles))
+            for i in list:
+                p1 = particles[i]
+                r1 = self.positions[p1]
+                u1 = self.velocities[p1]
+                for adj in self.adjacency[c]:
+                    if adj in cells.keys():
+                        for p2 in cells[adj]:
+                            r2, u2 = self.positions[p2], self.velocities[p2]
+                            if np.linalg.norm(r1 - r2) < 2 * self.radius and np.dot(u1 - u2, r1 - r2) < 0:
+                                collisions.add((p1, p2))
+                for j in list[i + 1:]:
+                    r2, u2 = self.positions[particles[j]], self.velocities[particles[j]]
+                    if np.linalg.norm(r1 - r2) < 2 * self.radius and np.dot(u1 - u2, r1 - r2) < 0:
+                        collisions.add((p1, particles[j]))
         x_crosses = np.where((0 > self.positions[:, 0]) | (self.positions[:, 0] > self.size))[0]
         y_crosses = np.where((0 > self.positions[:, 1]) | (self.positions[:, 1] > self.size))[0]
         z_crosses = np.where((0 > self.positions[:, 2]) | (self.positions[:, 2] > self.size))[0]
